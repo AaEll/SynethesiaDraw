@@ -9,7 +9,8 @@ class DrawApp extends StatelessWidget {
       title: 'DrawApp',
       home: Scaffold(
         appBar: AppBar(
-          title: Text('DrawApp'),
+          title: Text('Synethesia'),
+          backgroundColor: Colors.amberAccent[200],
         ),
         body: BlocProvider<PainterBloc>(
           child: DrawPage(),

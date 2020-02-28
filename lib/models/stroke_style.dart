@@ -3,15 +3,15 @@ import './draw_event.dart';
 
 // Generated code part of this Built Value.
 // Generate using `flutter packages pub run build_runner build`
-part 'stroke_width.g.dart';
+part 'stroke_style.g.dart';
 
-abstract class StrokeWidthChangeEvent
+abstract class StrokeStyleChangeEvent
     implements
-        Built<StrokeWidthChangeEvent, StrokeWidthChangeEventBuilder>,
+        Built<StrokeStyleChangeEvent, StrokeStyleChangeEventBuilder>,
         DrawEvent {
-  double get width;
+  int get style;
 
-  StrokeWidthChangeEvent._();
-  factory StrokeWidthChangeEvent([updates(StrokeWidthChangeEventBuilder b)]) =
-  _$StrokeWidthChangeEvent;
+  StrokeStyleChangeEvent._();
+  factory StrokeStyleChangeEvent([updates(StrokeStyleChangeEventBuilder b)]) =
+  _$StrokeStyleChangeEvent;
 }

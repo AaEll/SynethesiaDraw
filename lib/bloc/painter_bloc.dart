@@ -3,12 +3,12 @@ import 'package:built_collection/built_collection.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/clear.dart';
-import '../models/color.dart';
 import '../models/draw_event.dart';
 import '../models/end_touch.dart';
 import '../models/stroke.dart';
+import '../models/stroke_style.dart';
 import '../models/stroke_width.dart';
-import '../models/touch_location.dart';
+import '../models/touch_location_color.dart';
 
 part 'bloc_provider.dart';
 
@@ -17,13 +17,9 @@ class PainterBloc extends BlocBase {
   BuiltList<Stroke> _strokes = BuiltList<Stroke>();
 
   // In progress stroke
-  BuiltList<TouchLocationEvent> _locations = BuiltList<TouchLocationEvent>();
-  ColorChangeEvent _color = (ColorChangeEventBuilder()
-        ..red = 0
-        ..green = 0
-        ..blue = 0)
-      .build();
-  double _width = 1;
+  BuiltList<TouchLocationColorEvent> _locations_colors = BuiltList<TouchLocationColorEvent>();
+  double _width = 7;
+  int _strokeStyle = 1;
 
   // Streamed input into this BLoC
   final _drawEvents = BehaviorSubject<DrawEvent>();
@@ -34,34 +30,35 @@ class PainterBloc extends BlocBase {
   StreamSink<BuiltList<Stroke>> get _strokesOut => _strokesSubject.sink;
   ValueObservable<BuiltList<Stroke>> get strokes => _strokesSubject.stream;
 
-  final _colorSubject = BehaviorSubject<ColorChangeEvent>();
-  StreamSink<ColorChangeEvent> get _colorOut => _colorSubject.sink;
-  ValueObservable<ColorChangeEvent> get color => _colorSubject.stream;
-
   final _widthSubject = BehaviorSubject<double>();
   StreamSink<double> get _widthOut => _widthSubject.sink;
   ValueObservable<double> get width => _widthSubject.stream;
 
+  final _styleSubject = BehaviorSubject<int>();
+  StreamSink<int> get _styleOut => _styleSubject.sink;
+  ValueObservable<int> get strokeStyle => _styleSubject.stream;
+
   PainterBloc() {
     // Publish initial state
     _strokesOut.add(_strokes);
-    _colorOut.add(_color);
     _widthOut.add(_width);
+    _styleOut.add(_strokeStyle);
 
     // Update state based on events
     _drawEvents.stream.listen((drawEvent) {
       if (drawEvent is ClearEvent) {
         _strokes = BuiltList<Stroke>();
-        _locations = BuiltList<TouchLocationEvent>();
+        _locations_colors = BuiltList<TouchLocationColorEvent>();
         _strokesOut.add(_strokes);
-      } else if (drawEvent is ColorChangeEvent) {
+      } else if (drawEvent is StrokeStyleChangeEvent) {
         finalizeCurrentStroke();
-        _color = drawEvent;
-        _colorOut.add(_color);
-      } else if (drawEvent is TouchLocationEvent) {
-        _locations = (_locations.toBuilder()..add(drawEvent)).build();
+        _strokeStyle = drawEvent.style;
+        _styleOut.add(_strokeStyle);
+      } else if (drawEvent is TouchLocationColorEvent) {
+        _locations_colors = (_locations_colors.toBuilder()..add(drawEvent)).build();
         final allStrokes = (_strokes.toBuilder()..add(_stroke)).build();
         _strokesOut.add(allStrokes);
+
       } else if (drawEvent is EndTouchEvent) {
         finalizeCurrentStroke();
       } else if (drawEvent is StrokeWidthChangeEvent) {
@@ -78,16 +75,16 @@ class PainterBloc extends BlocBase {
         (strokeBuilder) {
           strokeBuilder
             ..strokeWidth = _width
-            ..color = _color.toBuilder()
-            ..locations = _locations.toBuilder();
+            ..strokeStyle = _strokeStyle
+            ..location_colors = _locations_colors.toBuilder();
         },
       );
 
   void finalizeCurrentStroke() {
-    if (_locations.length > 0) {
+    if (_locations_colors.isNotEmpty) {
       _strokes = (_strokes.toBuilder()..add(_stroke)).build();
       _strokesOut.add(_strokes);
-      _locations = BuiltList<TouchLocationEvent>();
+      _locations_colors = BuiltList<TouchLocationColorEvent>();
     }
   }
 
@@ -95,7 +92,7 @@ class PainterBloc extends BlocBase {
   void dispose() {
     _drawEvents.close();
     _strokesSubject.close();
-    _colorSubject.close();
-    _strokesSubject.close();
+    _widthSubject.close();
+    _styleSubject.close();
   }
 }
