@@ -26,7 +26,7 @@ class StrokePainter extends CustomPainter {
       for (var i = 0; i < stroke.location_colors.length; i++) {
         final to = stroke.location_colors[i];
         paint.color = Color.fromARGB(
-            200, to.red,
+            255, to.red,
             to.green,
             to.blue);
         final point_field = ListBuilder<Offset>();
