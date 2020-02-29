@@ -152,6 +152,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
                       child: Icon(Icons.clear),
                       onPressed: () {
                         bloc.drawEvent.add(ClearEvent());
+                        _controller.reverse();
                       },
                     ),
                   ),
