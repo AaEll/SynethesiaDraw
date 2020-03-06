@@ -18,7 +18,7 @@ class PainterBloc extends BlocBase {
 
   // In progress stroke
   BuiltList<TouchLocationColorEvent> _locations_colors = BuiltList<TouchLocationColorEvent>();
-  double _width = 7;
+  double _width = 3;
   int _strokeStyle = 1;
 
   // Streamed input into this BLoC
