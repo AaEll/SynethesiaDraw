@@ -14,9 +14,10 @@ import 'package:drawapp/models/stroke_width.dart';
 import 'package:drawapp/models/touch_location_color.dart';
 import 'package:drawapp/strokes_painter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart' show getTemporaryDirectory;
+import 'package:mic_stream/mic_stream.dart';
 import 'package:flutter/animation.dart';
+import 'package:fft/fft.dart';
+
 
 
 
@@ -35,12 +36,14 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
                                     ColorTween(begin: Colors.blue[300], end: Colors.indigo[300]),
                                     ColorTween(begin: Colors.indigo[300], end: Colors.purple[300]),
                                     ColorTween(begin: Colors.indigo[300], end: Colors.grey[300])];
-  StreamSubscription _dbPeakSubscription;
-  FlutterSound flutterSound;
+  StreamSubscription _dbSubscription;
   Color newColor = Colors.red[300];
   bool recording = false;
   int strokeType = 1;
-  final t_CODEC _codec = t_CODEC.CODEC_AAC;
+  Stream<List<int>> stream;
+  final AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+  final SAMPLE_RATE = 16000;
+
 
   @override
   void initState() {
@@ -59,42 +62,72 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
       }
     });
 
-    flutterSound = FlutterSound();
-    flutterSound.setSubscriptionDuration(0.01);
-    flutterSound.setDbPeakLevelUpdate(0.04);
-    flutterSound.setDbLevelEnabled(true);
 
     startRecorder();
 
   }
 
+
   void startRecorder() async{
 
-    var tempDir = await getTemporaryDirectory();
-
-    await flutterSound.startRecorder(
-      uri: '${tempDir.path}/sound.aac',
-      codec: _codec,
-    );
-
+    stream = microphone(
+        audioSource: AudioSource.DEFAULT,
+        sampleRate: 16000,
+        channelConfig: ChannelConfig.CHANNEL_IN_MONO,
+        audioFormat: AUDIO_FORMAT);
     recording = true;
 
+    print('recording');
+
+    _dbSubscription = stream.listen((samples) {
+      var idx;
+      Color col;
+
+      var _red_ = 0.0;
+      var _green_ = 0.0;
+      var _blue_ = 0.0;
+
+      List<num> data; // = samples;
+
+      final windowed = Window(WindowType.HANN);
+      final samples_window = windowed.apply(samples);
+      data = samples_window;
+      final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
+      final freq_samples = FFT().Transform(data.sublist(0,end_idx));
+      final numeric_stability = 1;
+      final normalization_val = numeric_stability + freq_samples.fold(0.0, (a,b) => a+ math.sqrt(b.real*b.real+b.imaginary*b.imaginary));
+
+      //print(freq_samples);
+      for (var i=0;i < freq_samples.length/2; i++) {
+        idx = i * 6 ~/ freq_samples.length;
+        final lerp_val = (i * 6 / samples.length - idx);
+        col = tween_list[idx].lerp(lerp_val);
+        final magnitude = math.sqrt(freq_samples[i].real * freq_samples[i].real
+            + freq_samples[i].imaginary * freq_samples[i].imaginary);
+
+        _red_ = _red_ + col.red * magnitude/normalization_val;
+        _green_ = _green_ + col.green * magnitude/normalization_val;
+        _blue_ = _blue_ + col.blue * magnitude/normalization_val;
+
+      }
+
+      final _red = math.max(0,math.min(255,_red_.floor()));
+      final _green = math.max(0,math.min(255,_green_.floor()));
+      final _blue = math.max(0,math.min(255,_blue_.floor()));
+
+      setState(() {
+        newColor = Color.fromARGB(255, _red, _green, _blue);
+      });
+
+
+    });
   }
 
     @override
   Widget build(BuildContext context) {
     final bloc = BlocProvider.of<PainterBloc>(context);
-    if (recording && (_dbPeakSubscription == null)){
-      _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen( (value){
-        final idx = value ~/20;
-        final lerp_val = (value - 20*idx)/20;
-        setState(() {
-          newColor = tween_list[idx].lerp( lerp_val );
-        });
-      }
 
-      );
-    }
+    /*if (recording && (_dbPeakSubscription == null))    }*/
 
     return Scaffold(
       body: Container(
@@ -105,7 +138,6 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
               final localPosition =
                   object.globalToLocal(details.globalPosition);
               bloc.drawEvent.add(TouchLocationColorEvent((builder) {
-                if (recording){
                 builder
                   ..x = localPosition.dx
                   ..y = localPosition.dy
@@ -113,7 +145,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
                   ..blue = newColor.blue
                   ..green = newColor.green
                   ;
-                }
+
 
               }));
             });
