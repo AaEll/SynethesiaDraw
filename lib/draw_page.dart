@@ -30,13 +30,11 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
   AnimationController _controller;
   AnimationStatus _animationStatus = AnimationStatus.dismissed;
   final StrokeCap _strokeCap = StrokeCap.round;
-  final List<ColorTween> tween_list = [ColorTween(begin: Colors.red[300], end: Colors.orange[300]),
-                                    ColorTween(begin: Colors.orange[300], end: Colors.yellow[300]),
+  final List<ColorTween> tween_list = [ColorTween(begin: Colors.red[300], end: Colors.yellow[300]),
                                     ColorTween(begin: Colors.yellow[300], end: Colors.green[300]),
                                     ColorTween(begin: Colors.green[300], end: Colors.blue[300]),
                                     ColorTween(begin: Colors.blue[300], end: Colors.indigo[300]),
-                                    ColorTween(begin: Colors.indigo[300], end: Colors.purple[300]),
-                                    ColorTween(begin: Colors.indigo[300], end: Colors.grey[300])];
+                                    ColorTween(begin: Colors.indigo[300], end: Colors.purple[300])];
   StreamSubscription _dbSubscription;
   Color newColor = Colors.red[300];
   bool recording = false;
@@ -81,6 +79,11 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
   }
 
+  num frequency_projection(num x, num param1, num param2){
+
+    return x*param1/param2; //math.sqrt(x+1)*param1/math.sqrt(param2);
+  }
+
     @override
   Widget build(BuildContext context) {
     final bloc = BlocProvider.of<PainterBloc>(context);
@@ -114,11 +117,12 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         bloc.drawEvent.add(ClearEvent());
         //print(freq_samples);
         for (var i=0;i < freq_samples.length/2; i++){
-          idx = math.log(i/25+1).floor() %tween_list.length;
-          final lerp_val = (math.log(i/25+1) - math.log(i/25+1).floor());
-          col = tween_list[idx].lerp( lerp_val );
+          idx = frequency_projection(i,tween_list.length,freq_samples.length/2).floor();
+          final lerp_val = frequency_projection(i,tween_list.length,freq_samples.length/2) - idx;
+          col = tween_list[idx%tween_list.length ].lerp( lerp_val );
+          final multiplier = i+1 ; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
           final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
-              +freq_samples[i].imaginary*freq_samples[i].imaginary)*math.log(i/25+1).floor(), 0);
+              +freq_samples[i].imaginary*freq_samples[i].imaginary)*multiplier, 0);
 
           normalization_val = normalization_val+ magnitude;
 
@@ -130,10 +134,10 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
           setState(() {
             bloc.drawEvent.add(TouchLocationColorEvent((builder) {
               builder
-                ..x = magnitude/math.sqrt(normalization_val)
+                ..x = magnitude/10000
                 ..y = i*.6 + 60
-                ..red = col.red
-                ..blue = col.blue
+                ..red =  col.red
+                ..blue =  col.blue
                 ..green = col.green
               ;
             }));
@@ -141,9 +145,14 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
         }
 
-        final _red = math.max(0,math.min(255,(_red_/normalization_val).floor()));
-        final _green = math.max(0,math.min(255,(_green_/normalization_val).floor()));
-        final _blue = math.max(0,math.min(255,(_blue_/normalization_val).floor()));
+        final darkness_coefficient = 1.5 - math.atan(   math.log((normalization_val / 23179469) + 1)/5 )*2/math.pi ;
+
+        print(normalization_val);
+        print(darkness_coefficient);
+
+        final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
+        final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
+        final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
 
         newColor = Color.fromARGB(255, _red, _green, _blue);
 
