@@ -77,6 +77,8 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         audioFormat: AUDIO_FORMAT);
     recording = true;
 
+    print('recording!');
+
   }
 
     @override
@@ -94,6 +96,11 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         var idx;
         Color col;
 
+        var _red_ = 0.0;
+        var _green_ = 0.0;
+        var _blue_ = 0.0;
+
+
         List<num> data; // = samples;
 
         final windowed = Window(WindowType.HANN);
@@ -101,17 +108,23 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         data = samples_window;
         final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
         final freq_samples = FFT().Transform(data.sublist(0,end_idx));
-        final numeric_stability = 1;
-        final normalization_val = numeric_stability + freq_samples.fold(0.0, (a,b) => a+ math.sqrt(b.real*b.real+b.imaginary*b.imaginary));
+        final numeric_stability = 1.0;
+        var normalization_val = numeric_stability;
 
         bloc.drawEvent.add(ClearEvent());
-        print(freq_samples);
-        for (var i=0;i < freq_samples.length; i++){
-          idx = i*6 ~/freq_samples.length;
-          final lerp_val = (i*6/samples.length - idx);
+        //print(freq_samples);
+        for (var i=0;i < freq_samples.length/2; i++){
+          idx = math.log(i/25+1).floor() %tween_list.length;
+          final lerp_val = (math.log(i/25+1) - math.log(i/25+1).floor());
           col = tween_list[idx].lerp( lerp_val );
-          final magnitude =  math.sqrt(freq_samples[i].real*freq_samples[i].real
-              +freq_samples[i].imaginary*freq_samples[i].imaginary);
+          final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
+              +freq_samples[i].imaginary*freq_samples[i].imaginary)*math.log(i/25+1).floor(), 0);
+
+          normalization_val = normalization_val+ magnitude;
+
+          _red_ = _red_ + col.red * magnitude;
+          _green_ = _green_ + col.green * magnitude;
+          _blue_ = _blue_ + col.blue * magnitude;
 
 
           setState(() {
@@ -127,6 +140,24 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
           });
 
         }
+
+        final _red = math.max(0,math.min(255,(_red_/normalization_val).floor()));
+        final _green = math.max(0,math.min(255,(_green_/normalization_val).floor()));
+        final _blue = math.max(0,math.min(255,(_blue_/normalization_val).floor()));
+
+        newColor = Color.fromARGB(255, _red, _green, _blue);
+
+        setState(() {
+          bloc.drawEvent.add(TouchLocationColorEvent((builder) {
+            builder
+              ..x = 500
+              ..y = 600
+              ..red = newColor.red
+              ..blue = newColor.blue
+              ..green = newColor.green
+            ;
+          }));
+        });
 
       });
     }
@@ -236,6 +267,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
                       mini: true,
                       child: Icon(Icons.scatter_plot),
                       onPressed: () {
+                        startRecorder();
                         setState(() {
                           strokeType = 0;
                         });
