@@ -96,7 +96,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
       List<num> data; // = samples;
 
-      final windowed = Window(WindowType.HANN);
+      final windowed = Window(WindowType.HAMMING);
       final samples_window = windowed.apply(samples);
       data = samples_window;
       final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
@@ -123,7 +123,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
       }
 
-      final darkness_coefficient = math.max(0, 2 - math.log(   (normalization_val / 10179469) + 1) )  ;
+      final darkness_coefficient = math.max(0, 1.8 - math.log(   (normalization_val / 5179469) + 1) )  ;
 
       // print(normalization_val);
       // print(darkness_coefficient);
