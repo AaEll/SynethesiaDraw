@@ -13,12 +13,44 @@ class StrokePainter extends CustomPainter {
 
   StrokePainter({@required this.stroke, @required this.strokeCap});
 
+  void draw_lines(Canvas canvas,Paint paint, start_idx, end_idx,colorBegin, endColor ){
+
+    final color_tween = ColorTween( begin:colorBegin, end: endColor);
+    for (var i = start_idx; i < end_idx; i++) {
+      final from = stroke.location_colors[i];
+      final to = stroke.location_colors[i + 1];
+      paint.color = color_tween.lerp(((1.0*(i-start_idx))/(end_idx-start_idx)));
+      canvas.drawLine(Offset(from.x, from.y), Offset(to.x, to.y), paint);
+    }
+  }
+
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
 
-    if (stroke.strokeStyle == 0) {
+    if (stroke.strokeStyle == 1) {
+      paint.strokeWidth = stroke.strokeWidth;
+      paint.strokeCap = strokeCap;
+
+      Color beginColor;
+      Color color;
+      var start_idx = 0;
+      var location_color;
+      for (var i = 0; i < stroke.location_colors.length; i++) {
+        location_color = stroke.location_colors[i];
+        color  = Color.fromARGB(255, location_color.red, location_color.green, location_color.blue);
+        if (beginColor == null) {
+          beginColor = color;
+        } else if (beginColor != color){
+          draw_lines(canvas, paint, start_idx, i, beginColor, color);
+          start_idx = i;
+          beginColor = color;
+        }
+      }
+      //draw_lines(canvas, paint, start_idx, stroke.location_colors.length, beginColor, beginColor);
+
+    } else if (stroke.strokeStyle == 0) {
       final rnd =  Random( stroke.strokeWidth.floor());
 
       paint.strokeCap = StrokeCap.round;
@@ -44,20 +76,6 @@ class StrokePainter extends CustomPainter {
         }
 
         canvas.drawPoints(PointMode.points,point_field.build().toList(),paint);
-      }
-    } else if (stroke.strokeStyle == 1) {
-      paint.strokeWidth = stroke.strokeWidth;
-      paint.strokeCap = strokeCap;
-
-      for (var i = 0; i < stroke.location_colors.length - 1; i++) {
-        final from = stroke.location_colors[i];
-        final to = stroke.location_colors[i + 1];
-        paint.color = Color.fromARGB(
-            255, from.red,
-            from.green,
-            from.blue);
-
-        canvas.drawLine(Offset(from.x, from.y), Offset(to.x, to.y), paint);
       }
     }
   }

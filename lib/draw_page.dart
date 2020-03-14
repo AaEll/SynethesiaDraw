@@ -37,6 +37,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
                                     ColorTween(begin: Colors.indigo[300], end: Colors.purple[300]),
                                     ColorTween(begin: Colors.indigo[300], end: Colors.grey[300])];
   StreamSubscription _dbSubscription;
+  Color oldColor = Colors.red[300];
   Color newColor = Colors.red[300];
   bool recording = false;
   int strokeType = 1;
@@ -67,6 +68,10 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
   }
 
+  num frequency_projection(num x, num param1, num param2){
+    return math.sqrt(x)*param1/math.sqrt(param2);
+  }
+
 
   void startRecorder() async{
 
@@ -79,6 +84,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
     print('recording');
 
+
     _dbSubscription = stream.listen((samples) {
       var idx;
       Color col;
@@ -87,6 +93,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
       var _green_ = 0.0;
       var _blue_ = 0.0;
 
+
       List<num> data; // = samples;
 
       final windowed = Window(WindowType.HANN);
@@ -94,28 +101,39 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
       data = samples_window;
       final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
       final freq_samples = FFT().Transform(data.sublist(0,end_idx));
-      final numeric_stability = 1;
-      final normalization_val = numeric_stability + freq_samples.fold(0.0, (a,b) => a+ math.sqrt(b.real*b.real+b.imaginary*b.imaginary));
+      final numeric_stability = 1.0;
+      var normalization_val = numeric_stability;
 
       //print(freq_samples);
-      for (var i=0;i < freq_samples.length/2; i++) {
-        idx = i * 6 ~/ freq_samples.length;
-        final lerp_val = (i * 6 / samples.length - idx);
-        col = tween_list[idx].lerp(lerp_val);
-        final magnitude = math.sqrt(freq_samples[i].real * freq_samples[i].real
-            + freq_samples[i].imaginary * freq_samples[i].imaginary);
+      for (var i=0;i < freq_samples.length/2; i++){
+        idx = frequency_projection(i,tween_list.length,freq_samples.length/2).floor();
+        final lerp_val = frequency_projection(i,tween_list.length,freq_samples.length/2) - idx;
+        col = tween_list[idx%tween_list.length ].lerp( lerp_val );
+        final multiplier = 1 ; // i; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
+        final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
+            +freq_samples[i].imaginary*freq_samples[i].imaginary)*multiplier, 0);
 
-        _red_ = _red_ + col.red * magnitude/normalization_val;
-        _green_ = _green_ + col.green * magnitude/normalization_val;
-        _blue_ = _blue_ + col.blue * magnitude/normalization_val;
+        normalization_val = normalization_val+ magnitude;
+
+        _red_ = _red_ + col.red * magnitude;
+        _green_ = _green_ + col.green * magnitude;
+        _blue_ = _blue_ + col.blue * magnitude;
+
+
 
       }
 
-      final _red = math.max(0,math.min(255,_red_.floor()));
-      final _green = math.max(0,math.min(255,_green_.floor()));
-      final _blue = math.max(0,math.min(255,_blue_.floor()));
+      final darkness_coefficient = math.max(0, 2 - math.log(   (normalization_val / 10179469) + 1) )  ;
+
+      // print(normalization_val);
+      // print(darkness_coefficient);
+
+      final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
+      final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
+      final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
 
       setState(() {
+        oldColor = newColor;
         newColor = Color.fromARGB(255, _red, _green, _blue);
       });
 
@@ -150,15 +168,22 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
               }));
             });
           },
+
+
+
           onPanEnd: (DragEndDetails details) =>
               bloc.drawEvent.add(EndTouchEvent()),
           child: StreamBuilder<BuiltList<Stroke>>(
             stream: bloc.strokes,
             builder: (context, snapshot) {
-              return CustomPaint(
-                painter: StrokesPainter(
-                    strokeCap: _strokeCap, strokes: snapshot.data),
-                size: Size.infinite,
+              return  RepaintBoundary(
+                  child : CustomPaint(
+                     painter: StrokesPainter(
+                         strokeCap: _strokeCap, strokes: snapshot.data),
+                     size: Size.infinite,
+                     isComplex: true,
+                     willChange: true,
+                  )
               );
             },
           ),
