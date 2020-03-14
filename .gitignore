@@ -11,7 +11,7 @@
 .svn/
 android/key.properties
 .gitignore
-
+pubspec.loc
 # IntelliJ related
 *.iml
 *.ipr
