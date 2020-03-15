@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -42,7 +41,9 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
   int strokeType = 1;
   Stream<List<int>> stream;
   final AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-  final SAMPLE_RATE = 16000;
+  final SAMPLE_RATE = 32000;
+  final LOGS = [math.log(2), math.log(3), math.log(4), math.log(5),math.log(6), math.log(7)];
+
   // Start listening to the stream
 
 
@@ -70,7 +71,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
   void startRecorder() {
     stream = microphone(
         audioSource: AudioSource.DEFAULT,
-        sampleRate: 16000,
+        sampleRate: SAMPLE_RATE,
         channelConfig: ChannelConfig.CHANNEL_IN_MONO,
         audioFormat: AUDIO_FORMAT);
     recording = true;
@@ -79,9 +80,17 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
   }
 
-  num frequency_projection(num x, num param1, num param2){
+  List<num> frequency_projection(num x, num param1, num param2, int sample_rate){
+    //return math.sqrt(x)*param1/math.sqrt(param2);
+    //return x*param1/param2; //math.sqrt(x+1)*param1/math.sqrt(param2);
+    final return_val = List<double>(6);
+    final  n_harmonics = 6;
 
-    return x*param1/param2; //math.sqrt(x+1)*param1/math.sqrt(param2);
+    for ( var i = 0; i < n_harmonics; i++ ){
+      return_val[i] = ((math.log((x+1)*sample_rate/param2)/LOGS[i])%1)*param1;
+    }
+    return return_val;
+
   }
 
     @override
@@ -97,6 +106,7 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
       _dbSubscription = stream.listen((samples) {
         var idx;
+        var proj;
         Color col;
 
         var _red_ = 0.0;
@@ -108,8 +118,9 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
         final windowed = Window(WindowType.HANN);
         final samples_window = windowed.apply(samples);
-        data = samples_window;
+        data = samples;
         final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
+
         final freq_samples = FFT().Transform(data.sublist(0,end_idx));
         final numeric_stability = 1.0;
         var normalization_val = numeric_stability;
@@ -117,25 +128,30 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         bloc.drawEvent.add(ClearEvent());
         //print(freq_samples);
         for (var i=0;i < freq_samples.length/2; i++){
-          idx = frequency_projection(i,tween_list.length,freq_samples.length/2).floor();
-          final lerp_val = frequency_projection(i,tween_list.length,freq_samples.length/2) - idx;
+
+          proj = frequency_projection(i,tween_list.length,freq_samples.length/2,SAMPLE_RATE);
+          idx = proj.floor();
+
+          print(idx);
+          print(proj);
+
+          final lerp_val = proj - idx;
           col = tween_list[idx%tween_list.length ].lerp( lerp_val );
-          final multiplier = i+1 ; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
+
+          final multiplier = 1 ; // i; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
           final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
               +freq_samples[i].imaginary*freq_samples[i].imaginary)*multiplier, 0);
-
           normalization_val = normalization_val+ magnitude;
 
           _red_ = _red_ + col.red * magnitude;
           _green_ = _green_ + col.green * magnitude;
           _blue_ = _blue_ + col.blue * magnitude;
 
-
           setState(() {
             bloc.drawEvent.add(TouchLocationColorEvent((builder) {
               builder
-                ..x = magnitude/10000
-                ..y = i*.6 + 60
+                ..x = magnitude/1000
+                ..y = i*.9 + 30
                 ..red =  col.red
                 ..blue =  col.blue
                 ..green = col.green
@@ -145,25 +161,24 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
         }
 
-        final darkness_coefficient = 1.5 - math.atan(   math.log((normalization_val / 23179469) + 1)/5 )*2/math.pi ;
+        //final darkness_coefficient = math.max(0, 1.8 - math.log(   (normalization_val / 5179469) + 1) )  ;
 
-        print(normalization_val);
-        print(darkness_coefficient);
 
-        final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
-        final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
-        final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
-
-        newColor = Color.fromARGB(255, _red, _green, _blue);
+        //final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
+        //final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
+        //final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
+        final _red = math.max(0,math.min(255,(_red_/normalization_val).floor()));
+        final _green = math.max(0,math.min(255,(_green_/normalization_val).floor()));
+        final _blue = math.max(0,math.min(255,(_blue_/normalization_val).floor()));
 
         setState(() {
           bloc.drawEvent.add(TouchLocationColorEvent((builder) {
             builder
               ..x = 500
               ..y = 600
-              ..red = newColor.red
-              ..blue = newColor.blue
-              ..green = newColor.green
+              ..red = _red
+              ..blue = _green
+              ..green = _blue
             ;
           }));
         });
