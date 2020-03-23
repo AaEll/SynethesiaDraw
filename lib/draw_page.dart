@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:built_collection/built_collection.dart';
 import 'package:drawapp/bloc/painter_bloc.dart';
@@ -16,7 +17,8 @@ import 'package:drawapp/strokes_painter.dart';
 import 'package:flutter/material.dart';
 import 'package:mic_stream/mic_stream.dart';
 import 'package:flutter/animation.dart';
-import 'package:fft/fft.dart';
+import 'package:smart_signal_processing/smart_signal_processing.dart';
+import 'package:color_models/color_models.dart';
 
 
 
@@ -68,8 +70,10 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
   }
 
-  num frequency_projection(num x, num param1, num param2){
-    return math.sqrt(x)*param1/math.sqrt(param2);
+  double frequency_projection(num x, num max, num norm){
+    //return math.sqrt(x)*param1/math.sqrt(param2);
+    return (x*max/norm)%max; //math.sqrt(x+1)*param1/math.sqrt(param2);
+    //return return_val;
   }
 
 
@@ -84,60 +88,65 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
 
     print('recording');
 
-
     _dbSubscription = stream.listen((samples) {
-      var idx;
-      Color col;
+      var end_idx = math.pow(2,(math.log(samples.length)/math.log(2)).floor()).toInt();
 
-      var _red_ = 0.0;
-      var _green_ = 0.0;
-      var _blue_ = 0.0;
+      // convert (Array<Int> to Float64List)
+      var real = Float64List.fromList(samples.sublist(0,end_idx).map((v) => v.toDouble() ).toList());
+      var imag = Float64List(real.length); // array of 0's for imaginary part
 
+      final decayFactor = -3.0 / (real.length - 1);
+      WinFunc.expMult(real, decayFactor, false, '0');
 
-      List<num> data; // = samples;
+      // FFT transform inplace
+      FFT.transform(real, imag);
+      end_idx =  real.length~/2;
+      real = real.sublist(0,end_idx);
+      imag = imag.sublist(0,end_idx);
+      // run again for fundamental frequencies
+      //FFT.transform(real,imag);
+      //end_idx = end_idx~/2;
+      //real = real.sublist(0,end_idx);
+      //imag = imag.sublist(0,end_idx);
 
-      final windowed = Window(WindowType.HAMMING);
-      final samples_window = windowed.apply(samples);
-      data = samples_window;
-      final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
-      final freq_samples = FFT().Transform(data.sublist(0,end_idx));
       final numeric_stability = 1.0;
+
+      var wt_sum = 0.0;
       var normalization_val = numeric_stability;
 
       //print(freq_samples);
-      for (var i=0;i < freq_samples.length/2; i++){
-        idx = frequency_projection(i,tween_list.length,freq_samples.length/2).floor();
-        final lerp_val = frequency_projection(i,tween_list.length,freq_samples.length/2) - idx;
-        col = tween_list[idx%tween_list.length ].lerp( lerp_val );
-        final multiplier = 1 ; // i; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
-        final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
-            +freq_samples[i].imaginary*freq_samples[i].imaginary)*multiplier, 0);
+      for (var i=0;i < end_idx; i++){
 
+        final magnitude = math.sqrt(real[i]*real[i] + imag[i]*imag[i]);
         normalization_val = normalization_val+ magnitude;
 
-        _red_ = _red_ + col.red * magnitude;
-        _green_ = _green_ + col.green * magnitude;
-        _blue_ = _blue_ + col.blue * magnitude;
+        final projection = frequency_projection(i, 360, end_idx);
 
+        final col = HspColor(projection.floor(), 50, 50).toRgbColor();
 
-
+        wt_sum = wt_sum + projection*magnitude ;
       }
 
-      final darkness_coefficient = math.max(0, 1.8 - math.log(   (normalization_val / 5179469) + 1) )  ;
+      final mean_idx = wt_sum/normalization_val;
 
-      // print(normalization_val);
-      // print(darkness_coefficient);
+      final brightness = math.min(100,60*math.max(0, 5 - math.log(normalization_val)/4 ) ) ;
 
-      final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
-      final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
-      final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
+      final saturation = 50;
+
+      final hue = (math.sqrt(mean_idx)*math.log(normalization_val)*4).floor()%360;
+
+      print({hue,brightness,saturation});
+
+      final color = RgbColor.from(HspColor(hue,saturation,brightness));
+
+      final _red = color.red;
+      final _green = color.green;
+      final _blue = color.blue;
 
       setState(() {
         oldColor = newColor;
         newColor = Color.fromARGB(255, _red, _green, _blue);
       });
-
-
     });
   }
 
