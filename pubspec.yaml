@@ -26,7 +26,8 @@ dependencies:
   mic_stream:
     git:
       url: https://github.com/zvikarp/mic_stream
-  fft: ^0.2.0
+  smart_signal_processing: ^2.1.1
+  color_models: ^0.2.4
 
 
 dev_dependencies:

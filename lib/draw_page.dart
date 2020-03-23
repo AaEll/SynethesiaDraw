@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:typed_data';
+
 
 import 'package:built_collection/built_collection.dart';
 import 'package:drawapp/bloc/painter_bloc.dart';
@@ -13,9 +15,12 @@ import 'package:drawapp/models/stroke_width.dart';
 import 'package:drawapp/models/touch_location_color.dart';
 import 'package:drawapp/strokes_painter.dart';
 import 'package:flutter/material.dart';
+import 'package:drawapp/helper_functions.dart';
 import 'package:mic_stream/mic_stream.dart';
 import 'package:flutter/animation.dart';
-import 'package:fft/fft.dart';
+import 'package:smart_signal_processing/smart_signal_processing.dart';
+//import 'package:fft/fft.dart';
+import 'package:color_models/color_models.dart';
 
 
 
@@ -41,8 +46,8 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
   int strokeType = 1;
   Stream<List<int>> stream;
   final AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-  final SAMPLE_RATE = 32000;
-  final LOGS = [math.log(2), math.log(3), math.log(4), math.log(5),math.log(6), math.log(7)];
+  final SAMPLE_RATE = 44100;
+  //final LOGS = [math.log(2), math.log(3), math.log(4), math.log(5),math.log(6), math.log(7)];
 
   // Start listening to the stream
 
@@ -75,23 +80,9 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
         channelConfig: ChannelConfig.CHANNEL_IN_MONO,
         audioFormat: AUDIO_FORMAT);
     recording = true;
-
     print('recording!');
-
   }
 
-  List<num> frequency_projection(num x, num param1, num param2, int sample_rate){
-    //return math.sqrt(x)*param1/math.sqrt(param2);
-    //return x*param1/param2; //math.sqrt(x+1)*param1/math.sqrt(param2);
-    final return_val = List<double>(6);
-    final  n_harmonics = 6;
-
-    for ( var i = 0; i < n_harmonics; i++ ){
-      return_val[i] = ((math.log((x+1)*sample_rate/param2)/LOGS[i])%1)*param1;
-    }
-    return return_val;
-
-  }
 
     @override
   Widget build(BuildContext context) {
@@ -103,79 +94,86 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
     }
     if (recording && (_dbSubscription == null)){
 
-
       _dbSubscription = stream.listen((samples) {
-        var idx;
-        var proj;
-        Color col;
+        var end_idx = math.pow(2,(math.log(samples.length)/math.log(2)).floor()).toInt();
 
-        var _red_ = 0.0;
-        var _green_ = 0.0;
-        var _blue_ = 0.0;
+        // convert (Array<Int> to Float64List)
+        var real = Float64List.fromList(samples.sublist(0,end_idx).map((v) => v.toDouble() ).toList());
+        var imag = Float64List(real.length); // array of 0's for imaginary part
 
+        final decayFactor = -3.0 / (real.length - 1);
+        WinFunc.expMult(real, decayFactor, false, '0');
 
-        List<num> data; // = samples;
+        // FFT transform inplace
+        FFT.transform(real, imag);
+        end_idx =  real.length~/2;
+        real = real.sublist(0,end_idx);
+        imag = imag.sublist(0,end_idx);
+        // run again for fundamental frequencies
+        //FFT.transform(real,imag);
+        //end_idx = end_idx~/2;
+        //real = real.sublist(0,end_idx);
+        //imag = imag.sublist(0,end_idx);
 
-        final windowed = Window(WindowType.HANN);
-        final samples_window = windowed.apply(samples);
-        data = samples;
-        final end_idx = math.pow(2,(math.log(data.length)/math.log(2)).floor()).toInt();
-
-        final freq_samples = FFT().Transform(data.sublist(0,end_idx));
         final numeric_stability = 1.0;
+
+        var wt_sum = 0.0;
         var normalization_val = numeric_stability;
 
         bloc.drawEvent.add(ClearEvent());
         //print(freq_samples);
-        for (var i=0;i < freq_samples.length/2; i++){
+        for (var i=0;i < end_idx; i++){
 
-          proj = frequency_projection(i,tween_list.length,freq_samples.length/2,SAMPLE_RATE);
-          idx = proj.floor();
-
-          print(idx);
-          print(proj);
-
-          final lerp_val = proj - idx;
-          col = tween_list[idx%tween_list.length ].lerp( lerp_val );
-
-          final multiplier = 1 ; // i; //math.sqrt(i+1); //math.log(i/25+1).floor(); //1;
-          final magnitude = math.max( math.sqrt(freq_samples[i].real*freq_samples[i].real
-              +freq_samples[i].imaginary*freq_samples[i].imaginary)*multiplier, 0);
+          final magnitude = math.sqrt(real[i]*real[i] + imag[i]*imag[i]);
           normalization_val = normalization_val+ magnitude;
 
-          _red_ = _red_ + col.red * magnitude;
-          _green_ = _green_ + col.green * magnitude;
-          _blue_ = _blue_ + col.blue * magnitude;
+          final projection = frequency_projection(i, 360, end_idx);
+
+          final col = HspColor(projection.floor(), 50, 50).toRgbColor();
+
+          wt_sum = wt_sum + projection*magnitude ;
+
 
           setState(() {
             bloc.drawEvent.add(TouchLocationColorEvent((builder) {
               builder
                 ..x = magnitude/1000
-                ..y = i*.9 + 30
+                ..y = i*.66 + 15
                 ..red =  col.red
                 ..blue =  col.blue
                 ..green = col.green
               ;
             }));
           });
-
         }
 
-        //final darkness_coefficient = math.max(0, 1.8 - math.log(   (normalization_val / 5179469) + 1) )  ;
+        final mean_idx = wt_sum/normalization_val;
 
+        final brightness = math.min(100,60*math.max(0, 5 - math.log(normalization_val)/4 ) ) ;
 
+        final saturation = 50;
+
+        final hue = (math.sqrt(mean_idx)*math.log(normalization_val)*4).floor()%360;
+
+        print({hue,brightness,saturation});
+
+        final color = RgbColor.from(HspColor(hue,saturation,brightness));
+
+        final _red = color.red;
+        final _green = color.green;
+        final _blue = color.blue;
         //final _red = math.max(0,math.min(255,(_red_*darkness_coefficient/normalization_val).floor()));
         //final _green = math.max(0,math.min(255,(_green_*darkness_coefficient/normalization_val).floor()));
         //final _blue = math.max(0,math.min(255,(_blue_*darkness_coefficient/normalization_val).floor()));
-        final _red = math.max(0,math.min(255,(_red_/normalization_val).floor()));
-        final _green = math.max(0,math.min(255,(_green_/normalization_val).floor()));
-        final _blue = math.max(0,math.min(255,(_blue_/normalization_val).floor()));
+        //final _red = math.max(0,math.min(255,(_red_/normalization_val).floor()));
+        //final _green = math.max(0,math.min(255,(_green_/normalization_val).floor()));
+        //final _blue = math.max(0,math.min(255,(_blue_/normalization_val).floor()));
 
         setState(() {
           bloc.drawEvent.add(TouchLocationColorEvent((builder) {
             builder
-              ..x = 500
-              ..y = 600
+              ..x = (math.sqrt(mean_idx)*math.log(normalization_val))
+              ..y = 400
               ..red = _red
               ..blue = _green
               ..green = _blue

@@ -28,7 +28,7 @@ int PitchSpecralHPS(List<double> frequencies, int sample_rate){
     var idx = 0;
     for (var j=0; j<frequencies.length; j= j+k){  // down sample frequencies
       if (idx < input_length) {
-        afHps[idx] = afHps[idx] * frequencies[j];
+        afHps[idx] = afHps[idx] + frequencies[j];
       }
       idx++;
     }
@@ -40,3 +40,10 @@ int PitchSpecralHPS(List<double> frequencies, int sample_rate){
 
   return freq_out;
 }
+
+double frequency_projection(num x, num max, num norm){
+  //return math.sqrt(x)*param1/math.sqrt(param2);
+  return (x*max/norm)%max; //math.sqrt(x+1)*param1/math.sqrt(param2);
+  //return return_val;
+}
+
