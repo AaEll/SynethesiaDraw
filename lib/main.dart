@@ -1,6 +1,9 @@
-import 'package:drawapp/app.dart';
+import 'package:drawapp/landing.dart';
 import 'package:flutter/material.dart';
 
 void main() async {
-  runApp(DrawApp());
+  runApp(MaterialApp(
+    title: 'Navigation Basics',
+    home: LandingPage(),
+  ));
 }

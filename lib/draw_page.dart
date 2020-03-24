@@ -142,11 +142,12 @@ class DrawPageState extends State<DrawPage> with TickerProviderStateMixin {
       final _red = color.red;
       final _green = color.green;
       final _blue = color.blue;
-
-      setState(() {
-        oldColor = newColor;
-        newColor = Color.fromARGB(255, _red, _green, _blue);
-      });
+      if (this.mounted) {
+        setState(() {
+          oldColor = newColor;
+          newColor = Color.fromARGB(255, _red, _green, _blue);
+        });
+      }
     });
   }
 
