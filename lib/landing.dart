@@ -44,7 +44,7 @@ class LandingPage extends StatelessWidget {
                   color: Colors.cyanAccent,
                   child: Linkify(
                   onOpen: _onOpen,
-                  text: "https://VoiceBrush.app \n\nMail: aaron.elliot.dev@gmail.com \n\nView our privacy policy \n\n https://VoiceBrush.app/#privacy  ",
+                  text: "https://aaell.github.io/ \n\nMail: aaron.elliot.dev@gmail.com \n\nView our privacy policy \n\n https://aaell.github.io/privacy.html  ",
                 )
               ),
             ),
